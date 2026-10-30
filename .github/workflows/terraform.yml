@@ -1,0 +1,80 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths: ["terraform/**"]
+  push:
+    branches: [main]
+    paths: ["terraform/**"]
+
+permissions:
+  id-token: write   # lets the job fetch GitHub's OIDC token
+  contents: read
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform init
+        run: terraform init
+        env:
+          ARM_USE_OIDC: "true"   # azurerm provider reads GitHub's OIDC token directly
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_SKIP_PROVIDER_REGISTRATION: "true"
+      - name: Terraform plan
+        run: terraform plan -no-color -out=tfplan
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_SKIP_PROVIDER_REGISTRATION: "true"
+          TF_VAR_it_admins_group_id: ${{ vars.TF_VAR_it_admins_group_id }}
+          TF_VAR_finance_users_group_id: ${{ vars.TF_VAR_finance_users_group_id }}
+
+  apply:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform init
+        run: terraform init
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_SKIP_PROVIDER_REGISTRATION: "true"
+      - name: Terraform apply
+        run: terraform apply -auto-approve -no-color
+        env:
+          ARM_USE_OIDC: "true"
+          ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_SKIP_PROVIDER_REGISTRATION: "true"
+          TF_VAR_it_admins_group_id: ${{ vars.TF_VAR_it_admins_group_id }}
+          TF_VAR_finance_users_group_id: ${{ vars.TF_VAR_finance_users_group_id }}
+
