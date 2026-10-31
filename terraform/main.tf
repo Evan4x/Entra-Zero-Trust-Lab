@@ -1,5 +1,7 @@
 # Reference the resource group built on Day 1 — Terraform manages what's
 # inside it; it does not recreate the group itself.
+# OIDC CI test - plan check
+
 
 data "azurerm_resource_group" "lab" {
   name = "rg-identity-lab"
