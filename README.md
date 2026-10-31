@@ -9,11 +9,12 @@ CI: Plan | Apply
 Stack: Entra ID, Azure, Terraform, GitHub Actions
 
 What is this?
-This lab proves a small, realistic identity boundary end to end:
+Proves a small, realistic identity boundary end to end
 Users get access through groups, never through individual assignments
 Conditional Access enforces MFA and blocks legacy authentication
 Privileged access is eligible-only and time-bound, not standing
-Secrets live in Key Vault with role-based access — and the boundaries are tested with real logins, not just portal screenshots
+Secrets live in Key Vault with role-based access
+Boundaries are tested with real logins, not just portal screenshots
 Infrastructure is code, and changes go through a PR plan → merge apply pipeline in CI
 
 Architecture
@@ -50,16 +51,18 @@ Complete, live activation tested
 Break-glass
 Emergency Global Admin, excluded from every CA policy
 Created and login-tested
-Groups used throughout: IT-Admins, Finance-Users, HR-Users, Contractors, PIM-Azure-Contributors.
->
-Access is granted to groups, never to individual users.
+Groups used throughout: IT-Admins, Finance-Users, HR-Users, Contractors, PIM-Azure-Contributors
+Access rule: granted to groups, never to individual users
 Terraform resources — 9 in one apply
 Resource group reference (built on Day 1, managed, not recreated)
-Virtual network 10.10.0.0/16, subnet 10.10.1.0/24, NSG with zero custom inbound rules on purpose, plus the subnet association
+Virtual network 10.10.0.0/16, subnet 10.10.1.0/24
+NSG with zero custom inbound rules on purpose, plus the subnet association
 Log Analytics workspace (PerGB2018, 30-day retention)
 Key Vault with RBAC authorization, purge protection on, soft-delete 7 days
 Diagnostic setting sending Key Vault audit events to Log Analytics
-Role assignments: IT-Admins → Key Vault Secrets Officer, Finance-Users → Key Vault Secrets User
+Role assignments:
+IT-Admins → Key Vault Secrets Officer
+Finance-Users → Key Vault Secrets User
 
 Proof it works
 Key Vault access boundaries — tested with live logins
@@ -83,9 +86,11 @@ None
 —
 Forbidden (readMetadata denied)
 As designed
-Finding worth knowing: Finance users can't even see the vault in the Azure portal, because a data-plane role gives no management-plane Reader access. Their access was proven through the CLI, not the portal.
->
-Portal visibility is not proof of access, and lack of portal visibility is not proof of no access.
+Finding worth knowing:
+Finance users can't even see the vault in the Azure portal
+Reason: a data-plane role gives no management-plane Reader access
+Their access was proven through the CLI, not the portal
+Portal visibility is not proof of access, and lack of portal visibility is not proof of no access
 CI/CD — proven green
 Check
 Trigger
@@ -100,40 +105,77 @@ Green, no changes
 
 How to reproduce it (short version)
 This README is the overview. The full step-by-step tutorial lives separately — see Tutorial below.
-Prerequisites: an Entra ID tenant with P2, an Azure subscription, Terraform, Azure CLI, and a GitHub repo.
+Prerequisites:
+An Entra ID tenant with P2
+An Azure subscription
+Terraform
+Azure CLI
+A GitHub repo
+Steps:
 Create the Entra groups and test users, plus a break-glass Global Admin excluded from all CA policies
 Build CA01, CA02, and CA03 in Report-only, test them, disable Security Defaults, then switch them On
 Set up PIM: eligible Contributor on the lab resource group, capped at 1 hour, requiring MFA + justification
-Write the Terraform configuration and apply it locally. Verify the Key Vault boundaries with the three logins above
+Write the Terraform configuration and apply it locally
+Verify the Key Vault boundaries with the three logins above
 Migrate state to an Azure Storage backend (resource group, storage account, tfstate container)
-Create the Entra app registration for GitHub Actions, its service principal, and two federated credentials — one for main (apply), one for pull requests (plan)
+Create the Entra app registration for GitHub Actions, its service principal, and two federated credentials:
+One for main (apply)
+One for pull requests (plan)
 Give the service principal Contributor on the lab resource group only
-Save the GitHub repo Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, TF_VAR_it_admins_group_id, TF_VAR_finance_users_group_id
-Add .github/workflows/terraform.yml (plan on PRs touching terraform/, apply on pushes to main), commit, and push
-Prove it: open a PR touching terraform/ for a green plan, merge it for a green apply
+Save the GitHub repo Variables:
+AZURE_CLIENT_ID
+AZURE_TENANT_ID
+AZURE_SUBSCRIPTION_ID
+TF_VAR_it_admins_group_id
+TF_VAR_finance_users_group_id
+Add .github/workflows/terraform.yml:
+Plan on PRs touching terraform/
+Apply on pushes to main
+Commit and push
+Prove it:
+Open a PR touching terraform/ for a green plan
+Merge it for a green apply
 
 Tutorial
-The detailed, step-by-step guide is kept separate from this README so the two don't drift apart:
+The detailed, step-by-step guide is kept separate from this README so the two don't drift apart
 [Full tutorial — link to your guide / docs folder here]
 
 Lessons learned
-These are the two bugs that actually cost time — and both are worth knowing before you start:
 1. Federated-credential subjects are case-sensitive
-GitHub sends the repo name exactly as it is on GitHub — in this repo, Entra-Zero-Trust-Lab with capitals. A credential created with lowercase entra-zero-trust-lab fails login with AADSTS700213, even though the names look identical at a glance.
-Fix the credential to match GitHub's exact casing. Don't rename the repo to fit the typo.
+GitHub sends the repo name exactly as it is on GitHub
+In this repo, that's Entra-Zero-Trust-Lab with capitals
+A credential created with lowercase entra-zero-trust-lab fails login with AADSTS700213
+The names look identical at a glance — Azure still rejects them
+Fix the credential to match GitHub's exact casing
+Don't rename the repo to fit the typo
 2. GitHub Variable names must match exactly, or Terraform gets null
-A variable saved as IT_Finance_user is invisible to a workflow asking for TF_VAR_finance_users_group_id. The result was a plan trying to replace the Finance-Users Key Vault assignment because its principal came through as null — and a 403 when apply tried to delete it, because Contributor deliberately excludes managing role assignments.
-Fix the variable name, not the permission.
+A variable saved as IT_Finance_user is invisible to a workflow asking for TF_VAR_finance_users_group_id
+Result: a plan trying to replace the Finance-Users Key Vault assignment
+Reason: its principal came through as null
+Then apply hit a 403 trying to delete it, because Contributor deliberately excludes managing role assignments
+Fix the variable name, not the permission
 3. Verify role assignments from the resource scope, not with an assignee filter
-An assignee-filtered list can return empty even when the assignment exists. The scoped list is the reliable check.
+An assignee-filtered list can return empty even when the assignment exists
+The scoped list is the reliable check
 4. A silent command is not a failed command
-mkdir -p and variable assignments print nothing on success. Verify with a listing — don't re-run blindly.
+mkdir -p and variable assignments print nothing on success
+Verify with a listing
+Don't re-run blindly
 
 Cost & cleanup
-Lab resources are small: one resource group, one VNet, one Key Vault, one Log Analytics workspace
-Set a budget alert before building (this lab used a $5 alert)
-To tear down: terraform destroy from the terraform/ directory, then remove the Entra app registration and federated credentials, and delete the storage account holding state if you no longer need it
-No secrets, passwords, or credentials are stored in this repo. State files and .tfvars are excluded from version control.
+Lab resources are small:
+One resource group
+One VNet
+One Key Vault
+One Log Analytics workspace
+Set a budget alert before building
+This lab used a $5 alert
+To tear down:
+terraform destroy from the terraform/ directory
+Remove the Entra app registration and federated credentials
+Delete the storage account holding state if you no longer need it
+No secrets, passwords, or credentials are stored in this repo
+State files and .tfvars are excluded from version control
 
 Repository structure
 .github/workflows/terraform.yml   # OIDC plan (PR) and apply (main) pipeline
